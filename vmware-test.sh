@@ -35,7 +35,7 @@ mkdir -p /mnt/boot/efi
 mount "$EFI_PART" /mnt/boot/efi
 
 echo "[3/8] Instalando base del sistema..."
-pacstrap /mnt base linux-hardened linux-firmware btrfs-progs vim sudo grub efibootmgr networkmanager
+pacstrap /mnt base base-devel linux-hardened linux-hardened-headers linux-firmware btrfs-progs vim sudo grub efibootmgr networkmanager pipewire-alsa pipewire-pulse pipewire-jack wireplumber reflector zsh zsh-completions zsh-autosuggestions openssh
 
 echo "[4/8] Configurando sistema..."
 genfstab -U /mnt >> /mnt/etc/fstab
@@ -52,6 +52,7 @@ echo "KEYMAP=$KEYMAP" > /etc/vconsole.conf
 
 echo "[5/8] Instalando GRUB con soporte LUKS + EFI..."
 sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect keyboard keymap modconf block encrypt filesystems fsck)/' /etc/mkinitcpio.conf
+echo 'MODULES=(vfat usb_storage hid_generic xhci_pci)' >> /etc/mkinitcpio.conf
 mkinitcpio -p linux-hardened
 
 echo -e "$PASSWORD\n$PASSWORD" | passwd root
@@ -73,7 +74,24 @@ GRUBCFG
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Arch
 grub-mkconfig -o /boot/grub/grub.cfg
 
+# Habilitar servicios
 systemctl enable NetworkManager
+systemctl enable sshd
+systemctl enable reflector.timer
+
+# Configurar reflector para usar mirrors de Chile
+echo "[8/8] Configurando reflector para mirrors de Chile..."
+mkdir -p /etc/xdg/reflector
+cat <<'EOF2' > /etc/xdg/reflector/reflector.conf
+--country Chile
+--latest 10
+--sort rate
+--save /etc/pacman.d/mirrorlist
+EOF2
+
+systemctl start reflector.timer
+reflector --config /etc/xdg/reflector/reflector.conf
+
 EOF
 
 echo "[6/8] ¡Instalación completada! Puedes reiniciar."
