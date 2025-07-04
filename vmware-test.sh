@@ -1,4 +1,3 @@
-
 #!/bin/bash
 set -e
 
@@ -7,7 +6,6 @@ EFI_SIZE="1G"
 HOSTNAME="Hyprland"
 USERNAME="chosenundead"
 LOCALE="es_AR.UTF-8"
-KEYMAP="es-winkeys"
 TIMEZONE="America/Argentina/Buenos_Aires"
 
 echo "[+] Introduce una contraseña para cifrar la partición LUKS:"
@@ -44,8 +42,10 @@ mount -o noatime,compress=zstd,ssd,discard=async,subvol=@ /dev/mapper/cryptroot 
 mkdir -p /mnt/boot/efi
 mount "$EFI_PART" /mnt/boot/efi
 
-echo "[3/8] Instalando base del sistema..."
-pacstrap /mnt base base-devel linux-hardened linux-hardened-headers linux-firmware btrfs-progs vim sudo grub efibootmgr networkmanager pipewire-alsa pipewire-pulse pipewire-jack wireplumber reflector zsh zsh-completions zsh-autosuggestions openssh
+echo "[3/8] Instalando base del sistema con herramientas extra..."
+pacstrap /mnt base base-devel linux-hardened linux-hardened-headers linux-firmware btrfs-progs \
+vim nano sudo grub efibootmgr networkmanager pipewire-alsa pipewire-pulse pipewire-jack wireplumber \
+reflector zsh zsh-completions zsh-autosuggestions openssh xf86-video-vmware open-vm-tools
 
 echo "[4/8] Configurando sistema..."
 genfstab -U /mnt >> /mnt/etc/fstab
@@ -58,11 +58,18 @@ hwclock --systohc
 echo "$LOCALE UTF-8" > /etc/locale.gen
 locale-gen
 echo "LANG=$LOCALE" > /etc/locale.conf
-echo "KEYMAP=$KEYMAP" > /etc/vconsole.conf
 
-echo "[5/8] Instalando GRUB con soporte LUKS + EFI..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect keyboard keymap modconf block encrypt filesystems fsck)/' /etc/mkinitcpio.conf
-echo 'MODULES=(vfat usb_storage hid_generic xhci_pci)' >> /etc/mkinitcpio.conf
+# Configurar idioma de consola en español latinoamericano
+echo -e "KEYMAP=la-latin1\nFONT=lat9w-16" > /etc/vconsole.conf
+
+echo "[5/8] Configurando initramfs con soporte LUKS + Btrfs + EFI..."
+# Comentar MODULES si existe
+sed -i 's/^MODULES=/#&/' /etc/mkinitcpio.conf
+# Agregar módulos necesarios
+echo 'MODULES=(btrfs vfat usb_storage hid_generic xhci_pci)' >> /etc/mkinitcpio.conf
+# Reemplazar HOOKS con los necesarios
+sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block encrypt filesystems fsck)/' /etc/mkinitcpio.conf
+# Regenerar initramfs
 mkinitcpio -p linux-hardened
 
 echo "[!] Establece la contraseña del usuario root:"
@@ -90,8 +97,8 @@ grub-mkconfig -o /boot/grub/grub.cfg
 systemctl enable NetworkManager
 systemctl enable sshd
 systemctl enable reflector.timer
+systemctl enable vmtoolsd.service
 
-# Configurar reflector para usar mirrors de Chile
 echo "[8/8] Configurando reflector para mirrors de Chile..."
 mkdir -p /etc/xdg/reflector
 cat <<'EOF2' > /etc/xdg/reflector/reflector.conf
@@ -106,3 +113,4 @@ reflector --config /etc/xdg/reflector/reflector.conf
 EOF
 
 echo "[✔] ¡Instalación completada! Puedes reiniciar."
+
