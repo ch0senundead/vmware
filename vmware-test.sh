@@ -1,14 +1,25 @@
+
 #!/bin/bash
 set -e
 
 DISK="/dev/sda"
 EFI_SIZE="1G"
-HOSTNAME="archvm"
-USERNAME="usuario"
-PASSWORD="changeme"
+HOSTNAME="Hyprland"
+USERNAME="chosenundead"
 LOCALE="es_AR.UTF-8"
 KEYMAP="es-winkeys"
 TIMEZONE="America/Argentina/Buenos_Aires"
+
+echo "[+] Introduce una contraseña para cifrar la partición LUKS:"
+read -s -p "Contraseña: " PASSWORD
+echo
+read -s -p "Confirmar contraseña: " PASSWORD2
+echo
+
+if [ "$PASSWORD" != "$PASSWORD2" ]; then
+  echo "❌ Las contraseñas no coinciden. Abortando..."
+  exit 1
+fi
 
 echo "[1/8] Formateando disco $DISK..."
 sgdisk --zap-all "$DISK"
@@ -29,7 +40,6 @@ mount /dev/mapper/cryptroot /mnt
 btrfs subvolume create /mnt/@
 umount /mnt
 
-# ⚙️ Opciones optimizadas para SSD: noatime, compress=zstd, discard=async, ssd
 mount -o noatime,compress=zstd,ssd,discard=async,subvol=@ /dev/mapper/cryptroot /mnt
 mkdir -p /mnt/boot/efi
 mount "$EFI_PART" /mnt/boot/efi
@@ -55,10 +65,12 @@ sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect keyboard keymap modconf block en
 echo 'MODULES=(vfat usb_storage hid_generic xhci_pci)' >> /etc/mkinitcpio.conf
 mkinitcpio -p linux-hardened
 
-echo -e "$PASSWORD\n$PASSWORD" | passwd root
+echo "[!] Establece la contraseña del usuario root:"
+passwd root
 
 useradd -m -G wheel $USERNAME
-echo -e "$PASSWORD\n$PASSWORD" | passwd $USERNAME
+echo "[!] Establece la contraseña para el usuario $USERNAME:"
+passwd $USERNAME
 echo "%wheel ALL=(ALL) ALL" >> /etc/sudoers
 
 UUID=\$(blkid -s UUID -o value $LUKS_PART)
@@ -91,7 +103,6 @@ EOF2
 
 systemctl start reflector.timer
 reflector --config /etc/xdg/reflector/reflector.conf
-
 EOF
 
-echo "[6/8] ¡Instalación completada! Puedes reiniciar."
+echo "[✔] ¡Instalación completada! Puedes reiniciar."
